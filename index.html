@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Chatroom with Gemini API</title>
+    <style>
+        body {
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #000;
+            /* Default background in case image doesn't load */
+        }
+
+        #backgroundWrapper {
+            width: 80vw;
+            /* Use viewport width units */
+            max-width: 800px;
+            /* Maximum width remains 800px */
+            height: 80vw;
+            /* Height is set to be the same in viewport width units, approximating the width */
+            max-height: 800px;
+            /* Maximum height to match the maximum width */
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            background-image: url('./img/giphy.gif');
+            /* Replace with your image path */
+            background-size: contain;
+            /* Ensures the image is fully visible without stretching */
+            background-repeat: no-repeat;
+            background-position: center bottom;
+        }
+
+        #gameContainer {
+            width: 100%;
+            /* Takes the full width of the background wrapper */
+            height: 200px;
+            /* Adjusted height to position at the bottom of the image */
+            background: rgba(0, 0, 0, 0.8);
+            /* Semi-transparent black background */
+            padding: 10px;
+            display: none;
+            box-sizing: border-box;
+            border: 1px solid #fff;
+            overflow: hidden;
+        }
+
+        #messages {
+            height: 80%;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+
+        .message {
+            margin: 5px 0;
+        }
+
+        .userMessage {
+            color: rgb(246, 255, 0);
+        }
+
+        .botMessage {
+            color: rgb(188, 0, 25);
+        }
+
+        #messageInput {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            background: transparent;
+            border: none;
+            border-top: 1px solid #fff;
+            color: white;
+            font-size: 16px;
+        }
+
+        #startButton, #introButton {
+            padding: 15px 30px;
+            /* Increase padding for a better look */
+            font-size: 20px;
+            /* Adjust font size */
+            cursor: pointer;
+            /* Position it within the wrapper */
+            margin-bottom: 20px;
+            color: white;
+            /* Text color */
+            background: rgba(0, 0, 0, 0.8);
+            /* Same semi-transparent background as introBlock */
+            border: 1px solid #fff;
+            /* Same border as introBlock */
+            border-radius: 5px;
+            /* Rounded corners similar to introBlock */
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+            /* Subtle shadow for depth */
+            transition: all 0.3s ease;
+            /* Smooth transition for hover effects */
+        }
+
+        #startButton:hover,
+        #introButton:hover {
+            background: rgba(0, 0, 0, 1);
+            /* Darker background on hover */
+            box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.5);
+            /* Slightly larger shadow on hover */
+            transform: scale(1.05);
+            /* Slightly enlarge on hover */
+        }
+
+        #introBlock {
+            width: 80%;
+            max-width: 600px;
+            background: rgba(0, 0, 0, 0.8);
+            /* Semi-transparent background */
+            padding: 20px;
+            box-sizing: border-box;
+            border: 1px solid #fff;
+            margin-bottom: 20px;
+            /* Space between intro block and start button */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+            /* Initially hidden */
+        }
+    </style>
+</head>
+
+<body>
+    <div id="introBlock">
+        <h2>《監獄》</h2>
+        <p>你是一位記者，在調查詭異廢棄工廠時昏迷，醒來時發現自己在一個詭異的監獄裡，到處都是遊蕩的精神病患，你必須巧妙地跟精神病患周旋才能逃出生天。</p>
+        <button id="startButton">Start Game</button>
+    </div>
+    <div id="backgroundWrapper">
+        <button id="introButton">遊戲介紹</button>
+        <div id="gameContainer">
+            <div id="messages"></div>
+            <form id="messageForm">
+                <input type="text" id="messageInput" placeholder="Type your command...">
+            </form>
+        </div>
+    </div>
+
+</body>
+<script>
+    var conversationHistory = [];
+
+    var apiKey = prompt("Please enter your API key:", "");
+    var userName = prompt("Please enter your name:", "");
+
+    if (!apiKey || !userName) {
+        alert("API key and name are required to use the chatroom.");
+        // Optionally, redirect or disable form
+    } else {
+        document.getElementById('messageForm').addEventListener('submit', function (event) {
+            event.preventDefault();
+            var inputElement = document.getElementById('messageInput');
+            var message = inputElement.value;
+
+            addToConversationHistory('user', message);
+            displayMessage(message, 'user');
+            inputElement.disabled = true;
+            fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    "contents": conversationHistory,
+                    "safetySettings": [
+                        {
+                            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            "threshold": "BLOCK_NONE"
+                        },
+                        {
+                            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                            "threshold": "BLOCK_NONE"
+                        },
+                    ],
+                    "generationConfig": {
+                        "stopSequences": [
+                            ""
+                        ],
+                        "temperature": 2.0,
+                        "maxOutputTokens": 2048,
+                        "topP": 0.8,
+                        "topK": 10
+                    }
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    var responseText = data.candidates[0].content.parts[0].text;
+                    addToConversationHistory('model', responseText);
+                    displayMessage(responseText, 'bot');
+                    inputElement.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Error:', error)
+                    inputElement.disabled = false;
+                });
+
+            document.getElementById('messageInput').value = '';
+        });
+    }
+
+    function addToConversationHistory(role, text) {
+        conversationHistory.push({
+            "role": role,
+            "parts": [{
+                "text": text
+            }]
+        });
+    }
+
+    function displayMessage(message, sender) {
+        var messageElement = document.createElement('div');
+        var formatMessage = formatText(message);
+        messageElement.classList.add('message');
+        if (sender === 'user') {
+            messageElement.classList.add('userMessage');
+        } else {
+            messageElement.classList.add('botMessage');
+        }
+        document.getElementById('messages').appendChild(messageElement);
+        updateSceneImage(message);
+        // Function to display the text one character at a time
+        function typeText(element, text, index) {
+            if (index < text.length) {
+                let char = text[index];
+                if (char === '<') {
+                    let endIndex = text.indexOf('>', index);
+                    if (endIndex !== -1) {
+                        element.innerHTML += text.substring(index, endIndex + 1);
+                        index = endIndex + 1;
+                    }
+                } else {
+                    element.innerHTML += char;
+                    index++;
+                }
+                setTimeout(function () {
+                    typeText(element, text, index);
+                }, 75); // Adjust typing speed by changing the delay (in milliseconds)
+            } else {
+                // Scroll to bottom after the entire message is displayed
+                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            }
+        }
+
+        // Start typing the formatted message
+        typeText(messageElement, formatMessage, 0);
+    }
+
+    function updateSceneImage(responseText) {
+        let sceneMatch = responseText.match(/場景：(.*?)\s/); // 使用正則表達式匹配場景描述
+        if (sceneMatch && sceneMatch[1]) {
+            let scene = sceneMatch[1];
+            console.log(scene);
+            // 檢查scene是否包含"宿舍"
+            if (scene.includes("囚房")) {
+                document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/cell.jpeg')";
+            } else if (scene.includes("艾蜜莉")) {
+                document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/emilyandbathroom.jpeg')";
+            } else if (scene.includes("牢房")) {
+                document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/cell.jpeg')";
+            } else if (scene.includes("怪物")) {
+                document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/billincell.jpeg')";
+            }
+        }
+    }
+
+    function formatText(text) {
+        // Replace ** with a new line and bold tag
+        let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<br><strong>$1</strong>');
+
+        // Replace * with a new line and bullet point
+        formattedText = formattedText.replace(/\*(.*?)\s/g, '<br>$1');
+
+        return formattedText;
+    }
+
+    document.getElementById('introButton').addEventListener('click', function () {
+        document.getElementById('introBlock').style.display = 'block';
+        this.style.display = 'none'; // Hide the intro button
+        document.getElementById('startButton').style.display = 'block'; // Show the start button
+    });
+
+    document.getElementById('startButton').addEventListener('click', function () {
+        // Change background image and display settings when starting the game
+        document.getElementById('backgroundWrapper').style.backgroundImage = "url('./img/dorm.jpeg')";
+        document.getElementById('introBlock').style.display = 'none'; // Show the game container
+        document.getElementById('gameContainer').style.display = 'inline';
+        document.getElementById('introButton').style.display = 'none'; // Hide the start button
+
+        conversationHistory.push({
+            "role": 'user',
+            "parts": [{
+                "text": `腳本：
+                        """
+                        遊戲標題：監獄
+                        遊戲背景
+                        ${userName}是一位記者，在調查詭異廢棄工廠時昏迷，醒來時發現自己在一個詭異的監獄裡，到處都是遊蕩的精神病患，你必須巧妙地跟精神病患周旋才能逃出生天。
+
+                        主要角色：
+                        ${userName}：主角，新聞記者。
+                        艾蜜莉：病嬌女囚犯。
+                        比爾：可怕的改造怪物。
+                        遊戲腳本流程
+
+                        開場：
+                        （場景：囚房）
+                        ${userName}發現自己在監獄醒來，試著呼救，卻聽見一個可怕的吼叫聲，正在往自己的方向過來。
+                        選擇A：用身體撞門。（選擇後進入死亡一劇情）
+                        選擇B：躲到床底下。（選擇後進入艾蜜莉劇情）
+
+                        死亡一：
+                        （場景：怪物）
+                        門紋絲不動，循聲而至的怪物將你吃掉了。
+                        選擇A：再玩一次。（選擇後回到開場劇情）
+                        選擇B：結束遊戲。（選擇後結束遊戲）
+
+                        艾蜜莉：
+                        （場景：艾蜜莉）
+                        你逃離牢房後，遇到一個女病患，她很喜歡你，問你要不要跟她一起住。
+                         選擇A1：告訴艾蜜莉自己喜歡男生。（選擇後進入死亡二劇情）
+                         選擇A2：告訴艾蜜莉自己會用筷子吃洋芋片。（選擇後進入大門劇情）
+
+                        死亡二：
+                        （場景：艾蜜莉）
+                        艾蜜莉很體貼，幫你動了一場手術，讓你當女生、他當男生。
+                        選擇A：再玩一次。（選擇後回到開場劇情）
+                        選擇B：結束遊戲。（選擇後結束遊戲）
+
+                        大門：
+                        （場景：牢房）
+                        艾蜜莉覺得你們不合適，離開了。你正要往大門走時，聽到了怪物的腳步聲。
+                         選擇A1：聲東擊西。（選擇後進入逃脫劇情）
+                         選擇A2：躲起來。（選擇後進入死亡三劇情）
+
+                        死亡三：
+                        （場景：怪物）
+                        你的呼吸聲讓怪物找到了你，好吃好吃。
+                        選擇A：再玩一次。（選擇後回到開場劇情）
+                        選擇B：結束遊戲。（選擇後結束遊戲）
+
+                        逃脫：
+                        （場景：牢房）
+                        你用噪音支開了怪物，從大門逃生。遊戲結束
+
+                        遊戲結尾
+                        遊戲最後將根據${userName}的選擇提供一段反思，強調在危機時刻緊急應變的重要性。"""
+
+                        請依照腳本中的劇情，開始文字冒險遊戲，每一次都需要呈現以下格式與資訊：
+                        <場景>：目前故事的背景為何
+                        敘述：直接放上場景和選擇之間的那段文字
+                        <選擇>：根據我選擇進入接下來的劇情或進入死亡劇情。
+
+                        根據我的選擇進行故事就好，不要幫我做出選擇`
+            }]
+        })
+        fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                "contents": conversationHistory,
+                "safetySettings": [
+                    {
+                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                        "threshold": "BLOCK_NONE"
+                    },
+                ],
+                "generationConfig": {
+                    "stopSequences": [
+                        ""
+                    ],
+                    "temperature": 2.0,
+                    "maxOutputTokens": 2048,
+                    "topP": 0.8,
+                    "topK": 10
+                }
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                console.log(conversationHistory);
+                var responseText = data.candidates[0].content.parts[0].text;
+                addToConversationHistory('model', responseText);
+                displayMessage(responseText, 'bot');
+            })
+            .catch(error => console.error('Error:', error));
+    });
+
+
+
+</script>
+
+</html>
